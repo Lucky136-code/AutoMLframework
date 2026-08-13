@@ -1,0 +1,37 @@
+repos:
+  # ---------------------------------------------------------------------------
+  # ruff — linting + formatting (replaces flake8 + black + isort)
+  # ---------------------------------------------------------------------------
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.4.10
+    hooks:
+      - id: ruff
+        args: [--fix]          # auto-fix safe issues
+      - id: ruff-format
+
+  # ---------------------------------------------------------------------------
+  # mypy — static type checking
+  # ---------------------------------------------------------------------------
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.10.0
+    hooks:
+      - id: mypy
+        additional_dependencies:
+          - pandas-stubs
+          - types-setuptools
+        args: [--strict]
+
+  # ---------------------------------------------------------------------------
+  # General hygiene
+  # ---------------------------------------------------------------------------
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-toml
+      - id: check-merge-conflict
+      - id: debug-statements      # catches leftover breakpoint() / pdb calls
+      - id: check-added-large-files
+        args: [--maxkb=1000]
