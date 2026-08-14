@@ -22,16 +22,16 @@ Most AutoML tools optimise metrics and produce charts — silently.
 
 | Capability | Status |
 |-----------|--------|
-| Intelligent dataset analysis | 🔜 Phase 1 |
-| Data quality assessment | 🔜 Phase 2 |
-| Explainable preprocessing | 🔜 Phase 3 |
-| Feature engineering | 🔜 Phase 4 |
-| Model selection & tuning | 🔜 Phase 5 |
-| SHAP / explainability | 🔜 Phase 6 |
-| Business insight narration | 🔜 Phase 7 |
-| Interactive HTML reports | 🔜 Phase 8 |
-| Deployment-ready model export | 🔜 Phase 9 |
 | **Decision Layer (core abstractions)** | ✅ Phase 0 |
+| Intelligent dataset analysis | ✅ Phase 1 |
+| Data quality assessment | ✅ Phase 2 |
+| Explainable preprocessing | ✅ Phase 3 |
+| Feature engineering | ✅ Phase 4 |
+| Model selection & tuning | ✅ Phase 5 |
+| SHAP / explainability | ✅ Phase 6 |
+| Business insight narration | ✅ Phase 7 |
+| Interactive HTML reports | ✅ Phase 8 |
+| Deployment-ready model export | ✅ Phase 9 |
 
 ---
 

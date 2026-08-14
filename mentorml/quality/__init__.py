@@ -1,2 +1,5 @@
-﻿# quality sub-package — implementation added in a later phase.
+"""mentorml.quality — Phase 2: Data Quality Assessment."""
 
+from mentorml.quality.quality_assessor import DataQualityAssessor, QualityIssue
+
+__all__ = ["DataQualityAssessor", "QualityIssue"]

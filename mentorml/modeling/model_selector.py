@@ -1,0 +1,247 @@
+"""
+mentorml.modeling.model_selector
+----------------------------------
+Phase 5: Model Selection & Tuning
+
+``ModelSelector`` evaluates a curated set of candidate estimators via
+cross-validated scoring, selects the best one, and narrates the decision.
+
+Candidate models
+----------------
+Classification:
+  - LogisticRegression (fast baseline, interpretable)
+  - RandomForestClassifier (robust, handles non-linearity)
+  - GradientBoostingClassifier (typically highest accuracy)
+
+Regression:
+  - Ridge (fast baseline, regularised linear)
+  - RandomForestRegressor (robust, non-linear)
+  - GradientBoostingRegressor (typically highest accuracy)
+
+Selection criterion
+-------------------
+``roc_auc`` (classification) or ``neg_root_mean_squared_error`` (regression),
+averaged over ``config.cv_folds`` stratified folds.
+"""
+
+from __future__ import annotations
+
+import logging
+from typing import Any
+
+import numpy as np
+import pandas as pd
+from sklearn.ensemble import GradientBoostingClassifier, GradientBoostingRegressor
+from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
+from sklearn.linear_model import LogisticRegression, Ridge
+from sklearn.model_selection import cross_val_score
+
+from mentorml.config import MentorConfig
+from mentorml.core.decision import DecisionLog, DecisionRecord, Severity
+
+logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Candidate model registry
+# ---------------------------------------------------------------------------
+
+_CLASSIFICATION_CANDIDATES: dict[str, Any] = {
+    "LogisticRegression": lambda cfg: LogisticRegression(
+        max_iter=500,
+        random_state=cfg.random_state,
+        n_jobs=cfg.n_jobs,
+    ),
+    "RandomForestClassifier": lambda cfg: RandomForestClassifier(
+        n_estimators=100,
+        random_state=cfg.random_state,
+        n_jobs=cfg.n_jobs,
+    ),
+    "GradientBoostingClassifier": lambda cfg: GradientBoostingClassifier(
+        n_estimators=100,
+        random_state=cfg.random_state,
+    ),
+}
+
+_REGRESSION_CANDIDATES: dict[str, Any] = {
+    "Ridge": lambda cfg: Ridge(random_state=cfg.random_state),
+    "RandomForestRegressor": lambda cfg: RandomForestRegressor(
+        n_estimators=100,
+        random_state=cfg.random_state,
+        n_jobs=cfg.n_jobs,
+    ),
+    "GradientBoostingRegressor": lambda cfg: GradientBoostingRegressor(
+        n_estimators=100,
+        random_state=cfg.random_state,
+    ),
+}
+
+
+# ---------------------------------------------------------------------------
+# ModelSelector
+# ---------------------------------------------------------------------------
+
+
+class ModelSelector:
+    """
+    Phase 5: Cross-validated model selection.
+
+    Evaluates candidate models for the inferred task type and returns the
+    best fitted estimator together with a full ranking ``DecisionRecord``.
+
+    Parameters
+    ----------
+    config : MentorConfig
+        Global configuration (``cv_folds``, ``random_state``, ``n_jobs``).
+
+    Examples
+    --------
+    ::
+
+        selector = ModelSelector(config)
+        result = selector.select(X_train, y_train, log, task_type="classification")
+        model = result["best_model"]
+    """
+
+    def __init__(self, config: MentorConfig) -> None:
+        self.config = config
+        self._best_model: Any = None
+        self._best_model_name: str = ""
+        self._scores: dict[str, float] = {}
+
+    def select(
+        self,
+        X: pd.DataFrame,
+        y: pd.Series,
+        log: DecisionLog,
+        task_type: str = "classification",
+    ) -> dict[str, Any]:
+        """
+        Select the best model via cross-validation and return it fitted.
+
+        Parameters
+        ----------
+        X : pd.DataFrame
+            Feature matrix (preprocessed).
+        y : pd.Series
+            Target vector.
+        log : DecisionLog
+            Decision log to append selection rationale to.
+        task_type : str
+            ``"classification"`` or ``"regression"``.
+
+        Returns
+        -------
+        dict[str, Any]
+            Keys: ``"best_model"``, ``"best_model_name"``, ``"task_type"``,
+            ``"cv_scores"``, ``"scoring_metric"``.
+        """
+        log.append(
+            DecisionRecord(
+                component="ModelSelector",
+                action="model_selection_start",
+                rationale=(
+                    f"Starting model selection for task_type='{task_type}'. "
+                    f"Evaluating candidates with {self.config.cv_folds}-fold CV."
+                ),
+                severity=Severity.INFO,
+                data={"task_type": task_type, "cv_folds": self.config.cv_folds},
+            )
+        )
+
+        is_classification = task_type == "classification"
+        candidates = (
+            _CLASSIFICATION_CANDIDATES
+            if is_classification
+            else _REGRESSION_CANDIDATES
+        )
+        scoring = "roc_auc" if is_classification else "neg_root_mean_squared_error"
+
+        scores: dict[str, float] = {}
+        for name, factory in candidates.items():
+            model = factory(self.config)
+            try:
+                cv_scores = cross_val_score(
+                    model,
+                    X,
+                    y,
+                    cv=self.config.cv_folds,
+                    scoring=scoring,
+                    n_jobs=self.config.n_jobs,
+                )
+                mean_score = float(np.mean(cv_scores))
+                scores[name] = mean_score
+
+                log.append(
+                    DecisionRecord(
+                        component="ModelSelector",
+                        action=f"cv_score:{name}",
+                        rationale=(
+                            f"{name}: {scoring}={mean_score:.4f} "
+                            f"(±{float(np.std(cv_scores)):.4f}) "
+                            f"over {self.config.cv_folds} folds."
+                        ),
+                        severity=Severity.INFO,
+                        data={
+                            "model": name,
+                            "mean_score": round(mean_score, 4),
+                            "std_score": round(float(np.std(cv_scores)), 4),
+                            "scoring": scoring,
+                        },
+                    )
+                )
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("Model %s failed CV: %s", name, exc)
+                log.append(
+                    DecisionRecord(
+                        component="ModelSelector",
+                        action=f"cv_failed:{name}",
+                        rationale=f"{name} failed cross-validation: {exc}",
+                        data={},
+
+                        severity=Severity.WARNING,
+                    )
+                )
+
+        if not scores:
+            raise RuntimeError("All candidate models failed cross-validation.")
+
+        best_name = max(scores, key=lambda k: scores[k])
+        best_model = candidates[best_name](self.config)
+        best_model.fit(X, y)
+
+        self._best_model = best_model
+        self._best_model_name = best_name
+        self._scores = scores
+
+        ranking = sorted(scores.items(), key=lambda x: x[1], reverse=True)
+        ranking_str = ", ".join(f"{n}={s:.4f}" for n, s in ranking)
+
+        log.append(
+            DecisionRecord(
+                component="ModelSelector",
+                action=f"best_model_selected:{best_name}",
+                rationale=(
+                    f"Selected '{best_name}' as best model "
+                    f"({scoring}={scores[best_name]:.4f}). "
+                    f"Full ranking: [{ranking_str}]. "
+                    "The highest cross-validated score minimises the risk of "
+                    "overfitting to a single train/test split."
+                ),
+                severity=Severity.INFO,
+                data={
+                    "best_model": best_name,
+                    "best_score": round(scores[best_name], 4),
+                    "scoring": scoring,
+                    "ranking": {n: round(s, 4) for n, s in ranking},
+                },
+            )
+        )
+
+        return {
+            "best_model": best_model,
+            "best_model_name": best_name,
+            "task_type": task_type,
+            "cv_scores": {n: round(s, 4) for n, s in scores.items()},
+            "scoring_metric": scoring,
+        }

@@ -57,6 +57,15 @@ from mentorml.analysis import (
     DatasetAnalyzer,
     DtypeCategory,
 )
+from mentorml.quality import DataQualityAssessor, QualityIssue
+from mentorml.preprocessing import ExplainablePreprocessor
+from mentorml.features import FeatureEngineer
+from mentorml.modeling import ModelSelector
+from mentorml.explainability import SHAPExplainer
+from mentorml.narrative import BusinessNarrator
+from mentorml.reporting import HTMLReportGenerator
+from mentorml.export import ModelExporter
+from mentorml.pipeline import MentorPipeline, PipelineResult
 
 # ---------------------------------------------------------------------------
 # Package metadata
@@ -112,4 +121,24 @@ __all__ = [
     "DatasetAnalyzer",
     "ColumnProfile",
     "DtypeCategory",
+    # Phase 2 — Quality
+    "DataQualityAssessor",
+    "QualityIssue",
+    # Phase 3 — Preprocessing
+    "ExplainablePreprocessor",
+    # Phase 4 — Features
+    "FeatureEngineer",
+    # Phase 5 — Modeling
+    "ModelSelector",
+    # Phase 6 — Explainability
+    "SHAPExplainer",
+    # Phase 7 — Narration
+    "BusinessNarrator",
+    # Phase 8 — Reporting
+    "HTMLReportGenerator",
+    # Phase 9 — Export
+    "ModelExporter",
+    # Pipeline
+    "MentorPipeline",
+    "PipelineResult",
 ]
